@@ -8,21 +8,41 @@
 
 // static function prototypes, functions only called in this file
 
+volatile uint16_t temp2 = 0;
+volatile uint32_t previous_time = 0;
+
 int main(void)
 {
-  adc_init();
-  _delay_ms(20);
+  serial0_init();
+  milliseconds_init();
 
-  DDRC = 0xFF;//put PORTC into output mode
-  PORTC = 0;
+  char serialString[60] = {};
+  uint16_t seconds_now = 0;
 
-  uint16_t voltageOverFixed = 0;
+  cli();                 // closes the interrupt
+  EICRA |= (1 << ISC31); //| (1<<ISC20);
+  EIMSK |= (1 << INT3);
+  sei(); // turns on the interrupt
 
-  while(1)//main loop
+  while (1)
   {
-    PORTC = 0 | (1<<((((voltageOverFixed-245)*128/59))>>7));
+    if (milliseconds_now() / 1000 > seconds_now)
+    {
+      seconds_now = milliseconds_now() / 1000;
 
-    voltageOverFixed = adc_read(0);
+      sprintf(serialString, "\nFalling edges: %u", temp2);
+      serial0_print_string(serialString);
+
+      temp2 = 0;
+    }
   }
-  return(1);
+  return (1);
+}
+
+ISR(INT3_vect) {
+  uint32_t current_time = milliseconds_now();
+  if (current_time > previous_time + 100) { // debounce period of 100ms
+    temp2++;
+    previous_time = current_time;
+  }
 }
