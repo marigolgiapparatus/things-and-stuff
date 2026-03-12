@@ -8,39 +8,27 @@
 
 // static function prototypes, functions only called in this file
 
-volatile uint16_t temp2 = 0;
-
 int main(void)
 {
   adc_init();
   _delay_ms(20);
   serial0_init();
-  milliseconds_init();
 
   char serialString[60] = {};
-  uint16_t seconds_now = 0;
 
-  cli(); // closes the interrupt
-  EICRA |= (1<<ISC21); //| (1<<ISC20);
-  EIMSK |= (1<<INT2);
-  sei(); // turns on the interrupt
+  uint16_t sensor_value = 0;
+  uint16_t voltage_equivalent = 0;
+  uint16_t distance = 0;
 
   while (1) {
-    if (milliseconds_now()/1000 > seconds_now) {
-      seconds_now = milliseconds_now()/1000;
+    sensor_value = adc_read(1);
 
-      sprintf(serialString, "\nRising edges: %u", temp2);
-      serial0_print_string(serialString);
+    voltage_equivalent = sensor_value * (5000/1024);
+    distance = 18900 / (voltage_equivalent - 292);
 
-      temp2=0;
-    }
-      
+    sprintf(serialString, "\nDistance: %u cm Voltage: %u V", distance, voltage_equivalent);
+    serial0_print_string(serialString);
   }
+    
   return (1);
-}
-
-ISR(INT2_vect) {
-  temp2++;
-  //serial0_print_string("I AM WORKING!\n");
-  //some code
 }
