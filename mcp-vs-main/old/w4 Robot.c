@@ -7,18 +7,15 @@
 #include "../lib/adc/adc.h"
 
 // static function prototypes, functions only called in this file
-volatile uint32_t milliseconds = 0;
-char serialString[100] = {};
 
 int main(void)
 {
- 
-
-  while (1) {
-    // set up main code
-
-    // set up button interrupt
+  DDRA = 0xFF;
+  PORTA = 0;
+  PORTA = (1<<PIN1);
+  while(1) 
+  {
+    PORTA ^= (1<<PIN1);
+    _delay_ms(3000);
   }
-
-  return (1);
 }

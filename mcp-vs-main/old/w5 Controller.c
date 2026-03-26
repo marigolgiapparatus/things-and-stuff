@@ -15,6 +15,12 @@ int main(void)
   // set up whatever
   serial0_init();
 
+  // timer for updates:
+  TCCR1A = 0; // disable pin output
+  TCCR1B = (1<<CS12)|(1<<CS10)|(1<<WGM12); // CTC mode, prescaler 1024
+  TIMSK1 = (1<<OCIE1A);
+  OCR1A = 776; 
+
   // internal clock
   TCCR5A = 0;
   TCCR5B = (1<<WGM52);
@@ -38,14 +44,6 @@ int main(void)
 
   while (1) {
     // set up main code
-    _delay_ms(20);
-    uint32_t mins = milliseconds / 3600000;
-    uint32_t secs = (milliseconds % 60000) / 1000;
-    uint32_t ms = milliseconds % 1000;
-    sprintf(serialString, "%lumin %lusec %lums total: %u\n", mins, secs, ms, milliseconds); 
-    // sprintf(serialString, "%lu sec %u ms\n", secs, ms);
-
-    serial0_print_string(serialString);
 
     // set up button interrupt
   }
@@ -70,7 +68,28 @@ ISR(INT3_vect) {
   return;
 }
 
+uint32_t getMilliseconds(void) {
+  uint32_t m;
+  uint8_t oldSREG = SREG;
+
+  cli();
+  m = milliseconds;
+  SREG = oldSREG;
+
+  return m;
+}
+
 ISR(TIMER5_COMPA_vect) {
   milliseconds++;
 }
 
+ISR(TIMER1_COMPA_vect) {
+  volatile uint32_t millis = milliseconds;
+  uint32_t mins = millis / 3600000;
+  uint32_t secs = (millis % 60000) / 1000;
+  uint32_t ms = millis % 1000;
+  sprintf(serialString, "%lumin %lusec %lums total: %u\n", mins, secs, ms, millis); 
+  // sprintf(serialString, "%lu sec %u ms\n", secs, ms);
+
+  serial0_print_string(serialString);
+}
