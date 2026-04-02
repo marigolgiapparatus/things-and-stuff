@@ -312,13 +312,13 @@ void serial2_write_bytes(uint8_t numBytes, ...) //Function to write 1 to 6 bytes
 {
 	va_list databytes; //retrieve variadic arguments
 	va_start(databytes, numBytes); 
-	serial2_write_byte(0xFF); //send start delimiter
+	serial2_write_byte(0xFF); //send start delimiter (255)
 	serial2_write_byte(numBytes); //send start delimiter
 	for(uint8_t i=0; i<numBytes; i++) //increment through data being written
 	{
 		serial2_write_byte(va_arg(databytes,int));
 	}
-	serial2_write_byte(0xFE); //send end delimiter
+	serial2_write_byte(0xFE); //send end delimiter (254)
 	va_end(databytes);
 } //end serial2_write_bytes
 
@@ -458,7 +458,7 @@ ISR(USART3_RX_vect)  // ISR executed whenever a new byte is available in the ser
 	static uint8_t numBytes = 6;
 	uint8_t	serial_byte_in = UDR3; //move serial byte into variable
 	
-	if(serial_byte_in == 0xFE) //check for ned delimiter
+	if(serial_byte_in == 0xFE) //check for end delimiter
 	{
 		if(serial_fsm_state == numBytes)
 		{
@@ -470,7 +470,7 @@ ISR(USART3_RX_vect)  // ISR executed whenever a new byte is available in the ser
 			serial3DataByte5 = recvByte5;
 			serial3DataByte6 = recvByte6;
 			// now that the stop byte has been received, set a flag that new data is available
-			serial2DataReady=true;
+			serial3DataReady=true;
 		}
 		serial_fsm_state = 0; //set to expect start byte
 	}

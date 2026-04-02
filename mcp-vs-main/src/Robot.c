@@ -10,51 +10,47 @@
 
 int main(void)
 {
-  //init adc
-  adc_init();
-  _delay_ms(20);
-
-  // joystick & switch
-
-
-  // init pwm
-
-  // 0-1-2-3 -> 10-11-12-13
+  serial0_init();
+  serial2_init();
 
   TCCR1A = 0; TCCR1B = 0;
-
   TCCR1A |= (1<<COM1B1) | (1<<COM1A1);
   TCCR1B |= (1<<WGM13) | (1<<CS11);
+  ICR1 = 20000;
+  DDRB |= (1<<PB5) | (1<<PB6);
 
-  ICR1 = 20000; // sets frequency (needs calc) - sets top
+  OCR1A = 1500;
 
-  DDRB |= (1<<PB5)|(1<<PB6); 
+  milliseconds_init();
+  adc_init();
 
-  uint16_t compValue = 1600;
-  uint16_t compValue2 = 1600;
-  OCR1A = compValue;
-  OCR1B = compValue2;
-
-  // joystick val
-  uint16_t xVal = 0;
-  uint16_t yVal = 0;
-
-  // servo output setup
-  serial0_init();
-
+  char serialString[100] = {};
+  uint16_t current_ms = 0;
+  uint16_t last_send_ms = 0;
+  uint16_t front_sensor_value;
+  uint16_t distance;
+  uint8_t rx_data[6];
 
   while (1) {
-    xVal = adc_read(2);
-    yVal = adc_read(1); // read joystick y val
+    current_ms = milliseconds_now();
 
-    // map joystick val to pwm comp value
-    compValue = xVal * 1.758 + 620; // map 620-2420
+    front_sensor_value = adc_read(1) / 4;
+    front_sensor_value = (front_sensor_value > 253) ? 253 : front_sensor_value;
 
-    compValue2 = yVal * 1.758 + 620; // map 620-2420
+    if ( serial2_available() ) {
+      serial2_get_data(rx_data, 2);
 
-    OCR1A = compValue; // set pwm duty cycle
+      sprintf(serialString, "%u %u\n", rx_data[0], rx_data[1]);
+      serial0_print_string(serialString);
 
-    OCR1B = compValue2; // set pwm duty cycle for second servo
+      OCR1A = rx_data[0] * 4 * 1.76 + 620;
+    }
+
+    if ( ( current_ms - last_send_ms) >= 50 ) {
+      serial2_write_bytes(3, front_sensor_value, 1, 2);
+      last_send_ms = current_ms;
+    }
+    //if ( serial2_available )
   }
 
   return (1);
