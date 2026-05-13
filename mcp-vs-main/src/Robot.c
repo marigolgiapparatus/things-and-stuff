@@ -13,12 +13,20 @@ void setup(void) {
   serial0_init();
   serial2_init();
 
-  TCCR1A = 0; TCCR1B = 0;
-  TCCR1A |= (1<<COM1B1) | (1<<COM1A1);
-  TCCR1B |= (1<<WGM13) | (1<<CS11);
-  ICR1 = 20000;
-  DDRB |= (1<<PB5) | (1<PB6);
+  // motor setup
+  TCCR3A = 0; TCCR3B = 0;
+  TCCR3A |= (1<<COM3B1) | (1<<COM3A1);
+  TCCR3B |= (1<<WGM33) | (1<<CS31);
+  ICR3 = 20000;
+  DDRE |= (1 << PE3) | (1 << PE4); // Set OC3A and OC3B as outputs for motor PWM
 
+  // timer setup
+  TCCR1A = 0;
+  TCCR1B = 0;
+  TCCR1A |= (1 << COM1A1);
+  TCCR1B |= (1 << WGM13) | (1 << CS11);
+  ICR1 = 20000;
+  DDRB |= (1 << PB5) | (1 << PB6);
   OCR1A = 1500;
 
   milliseconds_init();
@@ -54,6 +62,8 @@ void motor_magic(int16_t lm, int16_t rm) {
     PORTA &= ~(1 << PA2);
     PORTA |= (1 << PA3);
   }
+  
+  DDRA |= (1<<DDA0)|(1<<DDA1)|(1<<DDA2)|(1<<DDA3); //put A0-A3 into low impedance output mode
 }
 
 float max_float(float a, float b, float c) {
@@ -87,14 +97,14 @@ int main(void)
       int16_t left_raw = (xVal + yVal);
       int16_t right_raw = (-xVal + yVal);
 
-      float scale = max_float(fabs(left_raw), fabs(right_raw), 1.0f);
+      float scale = max_float(fabs(left_raw), fabs(right_raw), 1.0f); // code not used
 
-      uint16_t lm = left_raw;
-      uint16_t rm = right_raw;
+      int16_t lm = left_raw;
+      int16_t rm = right_raw;
 
       motor_magic(lm, rm);
 
-      sprintf(serialString, "%d %d\n", lm, rm);
+      sprintf(serialString, "%d %d\n", OCR3A, OCR3B);
       serial0_print_string(serialString);
 
       OCR1A = rx_data[0] * 4 * 1.76 + 620;
