@@ -33,9 +33,20 @@ void setup(void) {
   adc_init();
 }
 
-void motor_magic(int16_t lm, int16_t rm) {
+void motor_magic(uint16_t x, uint16_t y) {
+  int16_t yVal = (253 - x) - 126; // -126 to 127
+  int16_t xVal = (y) - 126; // -126 to 127
+
+  int16_t left_raw = (xVal + yVal);
+  int16_t right_raw = (-xVal + yVal);
+
+  // float scale = max_float(fabs(left_raw), fabs(right_raw), 1.0f); // code not used
+
+  int16_t lm = left_raw;
+  int16_t rm = right_raw;
+
   OCR3A = (int32_t)abs(lm) * 10000 / 126; // lm speed from magnitude of lm
-  OCR3B = (int32_t)abs(rm) * 10000 / 126; // lm speed from magnitude of rm
+  OCR3B = (int32_t)abs(rm) * 10000 / 126; // rm speed from magnitude of rm
 
   if (lm >= 0) // if lm is positive
   {
@@ -66,6 +77,10 @@ void motor_magic(int16_t lm, int16_t rm) {
   DDRA |= (1<<DDA0)|(1<<DDA1)|(1<<DDA2)|(1<<DDA3); //put A0-A3 into low impedance output mode
 }
 
+// void gripper_motor(uint16_t xVal, uint16_t yVal) {
+//   comp
+// }
+
 float max_float(float a, float b, float c) {
   if (a > b && a > c) return a;
   if (b > a && b > c) return b;
@@ -80,6 +95,8 @@ int main(void)
   uint16_t current_ms = 0;
   uint16_t last_send_ms = 0;
   uint16_t front_sensor_value;
+  uint16_t right_sensor_value;
+  uint16_t left_sensor_value;
   uint16_t distance;
   uint8_t rx_data[6];
 
@@ -89,29 +106,28 @@ int main(void)
     front_sensor_value = adc_read(1) / 4;
     front_sensor_value = (front_sensor_value > 253) ? 253 : front_sensor_value;
 
+    left_sensor_value = adc_read(2) / 4;
+    left_sensor_value = (left_sensor_value > 253) ? 253 : left_sensor_value;
+
+    right_sensor_value = adc_read(3) / 4;
+    right_sensor_value = (right_sensor_value > 253) ? 253 : right_sensor_value;
+
+    sprintf(serialString, "sensor: %3u %3u %3u\n", front_sensor_value, left_sensor_value, right_sensor_value); // remove later
+    serial0_print_string(serialString);
+
     if ( serial2_available() ) {
-      serial2_get_data(rx_data, 2);
-      int16_t yVal = (253 - rx_data[0]) - 126; // -126 to 127
-      int16_t xVal = (rx_data[1]) - 126; // -126 to 127
+      serial2_get_data(rx_data, 3); // x1, y1, y2
 
-      int16_t left_raw = (xVal + yVal);
-      int16_t right_raw = (-xVal + yVal);
+      motor_magic( rx_data[0], rx_data[1]); // set motor speeds and directions based on raw input
 
-      float scale = max_float(fabs(left_raw), fabs(right_raw), 1.0f); // code not used
-
-      int16_t lm = left_raw;
-      int16_t rm = right_raw;
-
-      motor_magic(lm, rm);
-
-      sprintf(serialString, "%d %d\n", OCR3A, OCR3B);
+      sprintf(serialString, "%d %d\n", OCR3A, OCR3B); // how fast motors are rotating
       serial0_print_string(serialString);
 
-      OCR1A = rx_data[0] * 4 * 1.76 + 620;
+      OCR1A = rx_data[2] * 4 * 1.76 + 620; // need to make it delta
     }
 
     if ( ( current_ms - last_send_ms) >= 50 ) {
-      serial2_write_bytes(3, front_sensor_value, 1, 2);
+      serial2_write_bytes(3, front_sensor_value, right_sensor_value, left_sensor_value);
       last_send_ms = current_ms;
     }
     //if ( serial2_available )

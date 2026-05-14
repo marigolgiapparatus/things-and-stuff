@@ -37,11 +37,11 @@ int main(void)
       serial2_get_data(rx_data, 3);
 
       uint16_t distance = (rx_data[0]);
-      uint16_t leftLight = (rx_data[1]);
-      uint16_t rightLight = (rx_data[2]); 
+      uint16_t right_distance = (rx_data[1]);
+      uint16_t left_distance = (rx_data[2]); 
 
-      uint8_t leftPercent = (leftLight * 100UL) / 255;
-      uint8_t rightPercent = (rightLight * 100UL) / 255;
+      //uint8_t leftPercent = (leftLight * 100UL) / 255;
+      //uint8_t rightPercent = (rightLight * 100UL) / 255;
 
       uint32_t range_voltage = distance * (5000/256);
       uint32_t range_cm = 0;
@@ -50,7 +50,7 @@ int main(void)
       }
 
       // Do something with the received data
-      sprintf(lcd_string, "L%3uR%3uD%3u", leftPercent, rightPercent, range_cm);
+      sprintf(lcd_string, "L%3uR%3uD%3u", range_cm, 18900 / (right_distance * (5000/256)-292), 18900 / (left_distance * (5000/256)-292));
       lcd_goto(0x00);
 
       lcd_puts(lcd_string);
@@ -60,7 +60,11 @@ int main(void)
       uint16_t xVal = (adc_read(0) >> 2) & 0xFD;
       uint16_t yVal = (adc_read(1) >> 2) & 0xFD;
 
-      serial2_write_bytes(2, xVal, yVal);
+      // 2nd joystick
+      // uint16_t xVal2 = (adc_read(15) >> 2) & 0xFD;
+      uint16_t yVal2 = (adc_read(14) >> 2) & 0xFD;
+
+      serial2_write_bytes(3, xVal, yVal, yVal2);
 
       last_ms = current_ms;
     }
