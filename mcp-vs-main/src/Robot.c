@@ -145,7 +145,6 @@ int main(void)
     // if (serial2_available)
 
     if (XBEE_AVAILABLE()) {
-      // serial2_get_data(rx_data, 3); // x1, y1, y2
       XBEE_GET(rx_data, 4);
 
       uint8_t auto_mode = rx_data[3]; // 0 for manual, 1 for auto
@@ -162,7 +161,6 @@ int main(void)
     }
 
     if ( ( current_ms - last_send_ms) >= 50 ) {
-      // serial2_write_bytes(3, front_sensor_value, right_sensor_value, left_sensor_value);
       XBEE_SEND(3, front_sensor_value, right_sensor_value, left_sensor_value);
       last_send_ms = current_ms;
     }

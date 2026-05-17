@@ -30,7 +30,7 @@ import curses
 import serial
 from pynput import keyboard as kb
 
-BAUD_RATE     = 38400   # XBee default; pass 115200 as 2nd arg when using USB_SIM mode
+BAUD_RATE     = int(sys.argv[2]) if len(sys.argv) >= 3 else 38400  # pass 115200 as 2nd arg for USB_SIM mode
 SEND_INTERVAL = 0.05    # 50 ms, matches controller timing
 
 NEUTRAL = 126
@@ -217,8 +217,6 @@ def main(stdscr):
         return
 
     port = sys.argv[1]
-    if len(sys.argv) >= 3:
-        BAUD_RATE = int(sys.argv[2])
     curses.curs_set(0)
     stdscr.nodelay(True)
 
