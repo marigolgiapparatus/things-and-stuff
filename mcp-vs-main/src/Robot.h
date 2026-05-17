@@ -5,6 +5,17 @@
 #ifndef CONTROLLER_H_ //double inclusion guard
 #define CONTROLLER_H_
 
+#define USB_SIM // Comment out this line to switch back to real XBee (serial2) operation
+
+#ifdef USB_SIM
+  #define XBEE_AVAILABLE()  serial0_available()
+  #define XBEE_GET(buf, n)  serial0_get_data(buf, n)
+  #define XBEE_SEND(...)    serial0_write_bytes(__VA_ARGS__)
+#else
+  #define XBEE_AVAILABLE()  serial2_available()
+  ...
+#endif
+
 //include standard libraries
 #include <avr/io.h>
 #include <avr/interrupt.h>

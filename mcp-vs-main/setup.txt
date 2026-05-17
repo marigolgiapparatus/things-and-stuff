@@ -1,0 +1,22 @@
+
+step 1. 
+pip install pyserial pynput
+
+step 2 upload robot
+
+step 3 close stuff on oher porst
+
+step 4 run controler sim:
+
+cd mcp-vs-main
+
+# USB_SIM (your repo default): robot USB, 115200
+python3 controller_sim.py /dev/cu.usbserial-XXXX 115200
+
+# Real XBee: dongle port, default 38400
+python3 controller_sim.py /dev/cu.usbserial-XXXX
+
+on windows:
+python3 controller_sim.py COM7 115200
+
+W/A/S/D to move, Q to quit

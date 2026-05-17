@@ -6,9 +6,20 @@
 #include "Robot.h"
 #include "../lib/adc/adc.h"
 
+typedef enum { MODE_AUTO, MODE_MANUAL } ControlMode;
+
 // static function prototypes, functions only called in this file
 
-// setup abstraction
+int8_t bound_sensors(int8_t sensor_value, int8_t low_bound, int8_t high_bound) {
+  if (sensor_value < low_bound) {
+    sensor_value = low_bound;
+  } else if (sensor_value > high_bound) {
+    sensor_value = high_bound;
+  }
+
+  return sensor_value;
+}
+
 void setup(void) {
   serial0_init();
   serial2_init();
@@ -29,11 +40,16 @@ void setup(void) {
   DDRB |= (1 << PB5) | (1 << PB6);
   OCR1A = 1500;
 
+  // battery setup
+  DDRB |= (1 << PB7); // set PB7 as output for battery voltage reading
+
   milliseconds_init();
   adc_init();
 }
 
 void motor_magic(uint16_t x, uint16_t y) {
+  // update motor speed and direction based on x and y values from controller
+
   int16_t yVal = (253 - x) - 126; // -126 to 127
   int16_t xVal = (y) - 126; // -126 to 127
 
@@ -81,6 +97,17 @@ void motor_magic(uint16_t x, uint16_t y) {
 //   comp
 // }
 
+void low_battery_check(uint16_t battery_adc) {
+  // 7/2 = 3.5 -> 3.5/5 * 1024 = 716.8 , so 716 V \approx 7V;
+  if (battery_adc < 716) { // if battery voltage is below 7V
+    // do something
+    PORTB |= (1 << PB7); // set PB7 high to indicate low battery
+  }
+  else {
+    PORTB &= ~(1 << PB7); // set PB7 low to indicate sufficient battery
+  }
+}
+
 float max_float(float a, float b, float c) {
   if (a > b && a > c) return a;
   if (b > a && b > c) return b;
@@ -97,40 +124,50 @@ int main(void)
   uint16_t front_sensor_value;
   uint16_t right_sensor_value;
   uint16_t left_sensor_value;
+  uint16_t battery_adc;
   uint16_t distance;
   uint8_t rx_data[6];
 
   while (1) {
     current_ms = milliseconds_now();
 
-    front_sensor_value = adc_read(1) / 4;
-    front_sensor_value = (front_sensor_value > 253) ? 253 : front_sensor_value;
+    battery_adc = adc_read(0);
+    low_battery_check(battery_adc); 
 
-    left_sensor_value = adc_read(2) / 4;
-    left_sensor_value = (left_sensor_value > 253) ? 253 : left_sensor_value;
+    // Find sensor values -> convert to centimeters -> bound to reasonable range
+    front_sensor_value = bound_sensors(34 / adc_read(1) - 6, 10, 80);
+    left_sensor_value = bound_sensors(12.5 / adc_read(2), 4, 30);
+    right_sensor_value = bound_sensors(12.5 / adc_read(3), 4, 30);
 
-    right_sensor_value = adc_read(3) / 4;
-    right_sensor_value = (right_sensor_value > 253) ? 253 : right_sensor_value;
-
-    sprintf(serialString, "sensor: %3u %3u %3u\n", front_sensor_value, left_sensor_value, right_sensor_value); // remove later
+    sprintf(serialString, "Sensors: %2ucm %2ucm %2ucm\n", front_sensor_value, left_sensor_value, right_sensor_value); // remove later
     serial0_print_string(serialString);
+    
+    // if (serial2_available)
 
-    if ( serial2_available() ) {
-      serial2_get_data(rx_data, 3); // x1, y1, y2
+    if (XBEE_AVAILABLE()) {
+      // serial2_get_data(rx_data, 3); // x1, y1, y2
+      XBEE_GET(rx_data, 4);
 
-      motor_magic( rx_data[0], rx_data[1]); // set motor speeds and directions based on raw input
+      uint8_t auto_mode = rx_data[3]; // 0 for manual, 1 for auto
+
+      if (auto_mode) {
+        // auto mode code here
+      } else {
+        motor_magic(rx_data[0], rx_data[1]); // set motor speeds and directions based on raw input
+        OCR1A = rx_data[2] * 4 * 1.76 + 620; // need to make it delta
+      }
 
       sprintf(serialString, "%d %d\n", OCR3A, OCR3B); // how fast motors are rotating
       serial0_print_string(serialString);
-
-      OCR1A = rx_data[2] * 4 * 1.76 + 620; // need to make it delta
     }
 
     if ( ( current_ms - last_send_ms) >= 50 ) {
-      serial2_write_bytes(3, front_sensor_value, right_sensor_value, left_sensor_value);
+      // serial2_write_bytes(3, front_sensor_value, right_sensor_value, left_sensor_value);
+      XBEE_SEND(3, front_sensor_value, right_sensor_value, left_sensor_value);
       last_send_ms = current_ms;
     }
     //if ( serial2_available )
+
   }
 
   return (1);
