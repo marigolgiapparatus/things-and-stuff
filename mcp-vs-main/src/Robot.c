@@ -6,6 +6,8 @@
 #include "Robot.h"
 #include "../lib/adc/adc.h"
 
+#define LDR_THRESHOLD 220
+
 typedef enum { MODE_AUTO, MODE_MANUAL } ControlMode;
 
 // static function prototypes, functions only called in this file
@@ -114,6 +116,13 @@ float max_float(float a, float b, float c) {
   return c;
 }
 
+volatile uint32_t ldr_left_period_ms = 0;
+volatile uint32_t ldr_right_period_ms = 0;
+static uint32_t ldr_left_last_crossing_ms = 0;
+static uint32_t ldr_right_last_crossing_ms = 0;
+static uint16_t ldr_left_prev = 0;
+static uint16_t ldr_right_prev = 0;
+
 int main(void)
 {
   setup();
@@ -127,6 +136,9 @@ int main(void)
   uint16_t battery_adc;
   uint16_t distance;
   uint8_t rx_data[6];
+  uint16_t ldr_left_value;
+  uint16_t ldr_right_value;
+
 
   while (1) {
     current_ms = milliseconds_now();
@@ -138,6 +150,34 @@ int main(void)
     front_sensor_value = bound_sensors(34 / adc_read(1) - 6, 10, 80);
     left_sensor_value = bound_sensors(12.5 / adc_read(2), 4, 30);
     right_sensor_value = bound_sensors(12.5 / adc_read(3), 4, 30);
+
+    ldr_left_value = adc_read(4);
+    ldr_right_value = adc_read(5);
+
+    if (ldr_left_value > LDR_THRESHOLD && ldr_left_prev <= LDR_THRESHOLD) {
+      uint32_t now = milliseconds_now();
+
+      if (ldr_left_last_crossing_ms > 0) {
+        ldr_left_period_ms = now - ldr_left_last_crossing_ms;
+      }
+      ldr_left_last_crossing_ms = now;
+    }
+    ldr_left_prev = ldr_left_value;
+
+    if (ldr_right_value > LDR_THRESHOLD && ldr_right_prev <= LDR_THRESHOLD) {
+      // right LDR just crossed threshold from below, do something
+      uint32_t now = milliseconds_now();
+
+      if (ldr_right_last_crossing_ms > 0) {
+        ldr_right_period_ms = now - ldr_right_last_crossing_ms;
+      }
+      ldr_right_last_crossing_ms = now;
+    }
+    ldr_right_prev = ldr_right_value;
+
+    // 0.25 Hz intervals
+    uint8_t ldr_left_freq = (ldr_left_period_ms > 0) ? (uint8_t)(4000 / ldr_left_period_ms) : 0;
+    uint8_t ldr_right_freq = (ldr_right_period_ms > 0) ? (uint8_t)(4000 / ldr_right_period_ms) : 0;
 
     sprintf(serialString, "Sensors: %2ucm %2ucm %2ucm\n", front_sensor_value, left_sensor_value, right_sensor_value); // remove later
     serial0_print_string(serialString);
@@ -161,7 +201,7 @@ int main(void)
     }
 
     if ( ( current_ms - last_send_ms) >= 50 ) {
-      XBEE_SEND(3, front_sensor_value, right_sensor_value, left_sensor_value);
+      XBEE_SEND(6, front_sensor_value, right_sensor_value, left_sensor_value, battery_adc, ldr_left_freq, ldr_right_freq);
       last_send_ms = current_ms;
     }
     //if ( serial2_available )

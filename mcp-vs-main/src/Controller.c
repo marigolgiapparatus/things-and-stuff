@@ -50,7 +50,7 @@ int main(void)
     lcd_puts(auto_mode ? "AUTO MODE" : "MANUAL MODE");
 
     if (serial2_available()) {
-      serial2_get_data(rx_data, 3);
+      serial2_get_data(rx_data, 6);
 
       uint16_t front_distance = (rx_data[0]);
       uint16_t left_distance = (rx_data[1]);
