@@ -19,7 +19,6 @@ Controls:
     Q            Quit
 """
 
-import os
 import sys
 import time
 import threading
@@ -42,13 +41,6 @@ lock    = threading.Lock()
 
 def make_packet(x: int, y: int, g: int) -> bytes:
     return bytes([0xFF, 3, x, y, g, 0xFE])
-
-
-def raw_to_cm(raw: int) -> int:
-    voltage = raw * 19
-    if voltage <= 292:
-        return 999
-    return 18900 // (voltage - 292)
 
 
 # ── Keyboard listener ─────────────────────────────────────────────────────────
@@ -128,10 +120,6 @@ def serial_reader(ser):
 
 # ── Display ───────────────────────────────────────────────────────────────────
 
-def clear():
-    os.system('cls' if os.name == 'nt' else 'clear')
-
-
 def draw(cx: int, cy: int, cg: int, connected: bool):
     with lock:
         keys = set(pressed)
@@ -157,25 +145,24 @@ def draw(cx: int, cy: int, cg: int, connected: bool):
     gripper_str = 'OPEN' if g_up else 'CLOSE' if g_dn else 'HOLD'
     status_str  = 'CONNECTED' if connected else 'ERROR - check port'
 
-    front_cm = raw_to_cm(s[0])
-    right_cm = raw_to_cm(s[1])
-    left_cm  = raw_to_cm(s[2])
-    cm_fmt = lambda v: f'{v:3d}' if v < 999 else '---'
-
-    clear()
-    print("====== ROVER KEYBOARD CONTROLLER ======")
-    print(f"  Status  : {status_str}")
-    print("---------------------------------------")
-    print(f"  Drive   : {direction}")
-    print(f"  Gripper : {gripper_str}")
-    print("---------------------------------------")
-    print(f"  TX  x={cx:3d}  y={cy:3d}  gripper={cg:3d}")
-    print(f"  Sensors (raw)  F={s[0]:3d}  R={s[1]:3d}  L={s[2]:3d}")
-    print(f"  Sensors  (cm)  F={cm_fmt(front_cm)}  R={cm_fmt(right_cm)}  L={cm_fmt(left_cm)}")
-    print("---------------------------------------")
-    print("  W/S = Drive    A/D = Turn")
-    print("  Up/Down = Gripper    Q = Quit")
-    print("=======================================")
+    lines = [
+        "====== ROVER KEYBOARD CONTROLLER ======",
+        f"  Status  : {status_str}",
+        "---------------------------------------",
+        f"  Drive   : {direction}",
+        f"  Gripper : {gripper_str}",
+        "---------------------------------------",
+        f"  TX  x={cx:3d}  y={cy:3d}  gripper={cg:3d}",
+        f"  Sensors (cm)  F={s[0]:3d}  R={s[1]:3d}  L={s[2]:3d}",
+        "---------------------------------------",
+        "  W/S = Drive    A/D = Turn",
+        "  Up/Down = Gripper    Q = Quit",
+        "=======================================",
+    ]
+    # jump cursor to top-left and overwrite — no cls flicker
+    sys.stdout.write('\033[H')
+    sys.stdout.write('\n'.join(f'{l:<40}' for l in lines) + '\n')
+    sys.stdout.flush()
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -199,6 +186,9 @@ def main():
     except serial.SerialException as e:
         print(f"Could not open {port}: {e}")
         sys.exit(1)
+
+    sys.stdout.write('\033[2J')   # clear screen once on startup
+    sys.stdout.flush()
 
     reader = threading.Thread(target=serial_reader, args=(ser,), daemon=True)
     reader.start()
