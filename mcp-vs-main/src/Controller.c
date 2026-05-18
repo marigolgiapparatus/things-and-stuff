@@ -47,14 +47,19 @@ int main(void)
     uint32_t current_ms = milliseconds_now();
 
     lcd_goto(0x40); // 2nd line
-    lcd_puts(auto_mode ? "AUTO MODE" : "MANUAL MODE");
+    lcd_puts(auto_mode ? "AUTO MODE  " : "MANUAL MODE");
 
     if (serial2_available()) {
       serial2_get_data(rx_data, 6);
 
+      // serial2_write_bytes(6, front_sensor_value, right_sensor_value, left_sensor_value, battery_adc, ldr_left_freq, ldr_right_freq);  
+
       uint16_t front_distance = (rx_data[0]);
       uint16_t left_distance = (rx_data[1]);
       uint16_t right_distance = (rx_data[2]); 
+      uint16_t battery_adc = (rx_data[3]);
+      uint16_t ldr_left_freq = (rx_data[4]);
+      uint16_t ldr_right_freq = (rx_data[5]);
 
       //uint8_t leftPercent = (leftLight * 100UL) / 255;
       //uint8_t rightPercent = (rightLight * 100UL) / 255;

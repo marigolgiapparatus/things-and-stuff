@@ -9,8 +9,8 @@ Install dependencies:
     pip install pyserial pynput
 
 Usage:
-    XBee adapter:  python3 controller_sim.py COM3
-    USB_SIM mode:  python3 controller_sim.py COM7 115200
+    USB_SIM mode (default):  python3 controller_sim.py COM7
+    XBee adapter:            python3 controller_sim.py COM3 38400
 
 Controls:
     W / S        Forward / Backward
@@ -25,22 +25,22 @@ import threading
 import serial
 from pynput import keyboard as kb
 
-BAUD_RATE     = int(sys.argv[2]) if len(sys.argv) >= 3 else 38400
+BAUD_RATE     = int(sys.argv[2]) if len(sys.argv) >= 3 else 115200
 SEND_INTERVAL = 0.05    # 50 ms, matches controller timing
 
 NEUTRAL = 126
 STEP    = 96
 
 pressed = set()
-sensors = [0, 0, 0]
+sensors = [0, 0, 0, 0, 0, 0]  # front, right, left, battery, ldr_left_freq, ldr_right_freq
 running = True
 lock    = threading.Lock()
 
 
 # ── Packet helpers ────────────────────────────────────────────────────────────
 
-def make_packet(x: int, y: int, g: int) -> bytes:
-    return bytes([0xFF, 3, x, y, g, 0xFE])
+def make_packet(x: int, y: int, g: int, auto: int = 0) -> bytes:
+    return bytes([0xFF, 4, x, y, g, auto, 0xFE])
 
 
 # ── Keyboard listener ─────────────────────────────────────────────────────────
@@ -91,9 +91,10 @@ def serial_reader(ser):
     while running:
         try:
             chunk = ser.read(ser.in_waiting or 1)
-            buf.extend(chunk)
+            if chunk:
+                buf.extend(chunk)
             while True:
-                start = buf.find(0xFF)
+                start = buf.find(b'\xff')
                 if start == -1:
                     buf.clear()
                     break
@@ -101,14 +102,16 @@ def serial_reader(ser):
                 if len(buf) < 2:
                     break
                 num = buf[1]
+                if num == 0 or num > 6:
+                    buf = buf[1:]
+                    continue
                 pkt_len = 2 + num + 1
                 if len(buf) < pkt_len:
                     break
                 if buf[pkt_len - 1] == 0xFE:
                     data = list(buf[2:2 + num])
-                    if num >= 3:
-                        with lock:
-                            sensors[:3] = data[:3]
+                    with lock:
+                        sensors[:] = data[:6] + [0] * (6 - len(data))
                     buf = buf[pkt_len:]
                 else:
                     buf = buf[1:]
@@ -154,14 +157,14 @@ def draw(cx: int, cy: int, cg: int, connected: bool):
         "---------------------------------------",
         f"  TX  x={cx:3d}  y={cy:3d}  gripper={cg:3d}",
         f"  Sensors (cm)  F={s[0]:3d}  R={s[1]:3d}  L={s[2]:3d}",
+        f"  Battery: {s[3]:3d}  LDR: L={s[4]:3d} R={s[5]:3d}",
         "---------------------------------------",
         "  W/S = Drive    A/D = Turn",
         "  Up/Down = Gripper    Q = Quit",
         "=======================================",
     ]
-    # jump cursor to top-left and overwrite — no cls flicker
     sys.stdout.write('\033[H')
-    sys.stdout.write('\n'.join(f'{l:<40}' for l in lines) + '\n')
+    sys.stdout.write('\n'.join(f'{l:<42}' for l in lines) + '\n')
     sys.stdout.flush()
 
 
@@ -173,8 +176,8 @@ def main():
     if len(sys.argv) < 2:
         print("Usage: python3 controller_sim.py <port> [baud]")
         print("")
-        print("  XBee adapter:  python3 controller_sim.py /dev/cu.usbserial-XXXX")
-        print("  USB_SIM mode:  python3 controller_sim.py COM7 115200")
+        print("  USB_SIM (default 115200):  python3 controller_sim.py COM7")
+        print("  XBee adapter (38400):      python3 controller_sim.py COM3 38400")
         sys.exit(1)
 
     port = sys.argv[1]

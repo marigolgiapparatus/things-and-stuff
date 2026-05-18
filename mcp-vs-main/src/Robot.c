@@ -12,7 +12,11 @@ typedef enum { MODE_AUTO, MODE_MANUAL } ControlMode;
 
 // static function prototypes, functions only called in this file
 
-int8_t bound_sensors(int8_t sensor_value, int8_t low_bound, int8_t high_bound) {
+int16_t bound_sensors(int16_t sensor_value, int16_t low_bound, int16_t high_bound) {
+  if (!sensor_value) {
+    return high_bound; // if sensor value is 0, treat as max distance ; avoids divid 0 errors
+  }
+
   if (sensor_value < low_bound) {
     sensor_value = low_bound;
   } else if (sensor_value > high_bound) {
@@ -20,6 +24,10 @@ int8_t bound_sensors(int8_t sensor_value, int8_t low_bound, int8_t high_bound) {
   }
 
   return sensor_value;
+}
+
+int min(int a, int b) {
+  return (a < b) ? a : b;
 }
 
 void setup(void) {
@@ -32,14 +40,14 @@ void setup(void) {
   TCCR3B |= (1<<WGM33) | (1<<CS31);
   ICR3 = 20000;
   DDRE |= (1 << PE3) | (1 << PE4); // Set OC3A and OC3B as outputs for motor PWM
+  DDRA |= (1 << PA0) | (1 << PA1) | (1 << PA2) | (1 << PA3); // Set PA0-PA3 as outputs for motor direction control
 
   // timer setup
-  TCCR1A = 0;
-  TCCR1B = 0;
+  TCCR1A = 0; TCCR1B = 0;
   TCCR1A |= (1 << COM1A1);
-  TCCR1B |= (1 << WGM13) | (1 << CS11);
+  TCCR1B |= (1<<WGM13) | (1<<CS11);
   ICR1 = 20000;
-  DDRB |= (1 << PB5) | (1 << PB6);
+  //DDRB |= (1 << PB5) | (1 << PB6);
   OCR1A = 1500;
 
   // battery setup
@@ -63,8 +71,8 @@ void motor_magic(uint16_t x, uint16_t y) {
   int16_t lm = left_raw;
   int16_t rm = right_raw;
 
-  OCR3A = (int32_t)abs(lm) * 10000 / 126; // lm speed from magnitude of lm
-  OCR3B = (int32_t)abs(rm) * 10000 / 126; // rm speed from magnitude of rm
+  OCR3A = min((int32_t)abs(lm) * 10000 / 126, ICR3); // lm speed from magnitude of lm
+  OCR3B = min((int32_t)abs(rm) * 10000 / 126, ICR3); // rm speed from magnitude of rm
 
   if (lm >= 0) // if lm is positive
   {
@@ -92,7 +100,6 @@ void motor_magic(uint16_t x, uint16_t y) {
     PORTA |= (1 << PA3);
   }
   
-  DDRA |= (1<<DDA0)|(1<<DDA1)|(1<<DDA2)|(1<<DDA3); //put A0-A3 into low impedance output mode
 }
 
 // void gripper_motor(uint16_t xVal, uint16_t yVal) {
@@ -128,8 +135,8 @@ int main(void)
   setup();
 
   char serialString[100] = {};
-  uint16_t current_ms = 0;
-  uint16_t last_send_ms = 0;
+  uint32_t current_ms = 0;
+  uint32_t last_send_ms = 0;
   uint16_t front_sensor_value;
   uint16_t right_sensor_value;
   uint16_t left_sensor_value;
@@ -146,10 +153,13 @@ int main(void)
     battery_adc = adc_read(0);
     low_battery_check(battery_adc); 
 
+    sprintf(serialString, "Battery ADC: %u\n", battery_adc);
+    serial0_print_string(serialString);
+
     // Find sensor values -> convert to centimeters -> bound to reasonable range
-    front_sensor_value = bound_sensors(34 / adc_read(1) - 6, 10, 80);
-    left_sensor_value = bound_sensors(12.5 / adc_read(2), 4, 30);
-    right_sensor_value = bound_sensors(12.5 / adc_read(3), 4, 30);
+    front_sensor_value = bound_sensors(34000 / (adc_read(1) *4.88), 10, 80);
+    left_sensor_value = bound_sensors(12500 / (adc_read(2) *4.88), 4, 30);
+    right_sensor_value = bound_sensors(12500 / (adc_read(3) *4.88), 4, 30);
 
     ldr_left_value = adc_read(4);
     ldr_right_value = adc_read(5);
@@ -179,33 +189,64 @@ int main(void)
     uint8_t ldr_left_freq = (ldr_left_period_ms > 0) ? (uint8_t)(4000 / ldr_left_period_ms) : 0;
     uint8_t ldr_right_freq = (ldr_right_period_ms > 0) ? (uint8_t)(4000 / ldr_right_period_ms) : 0;
 
-    sprintf(serialString, "Sensors: %2ucm %2ucm %2ucm\n", front_sensor_value, left_sensor_value, right_sensor_value); // remove later
-    serial0_print_string(serialString);
+    // sprintf(serialString, 
+    //         "Sensors: %2ucm %2ucm %2ucm\nBattery: %2u\nLDR: %2u %2u\nValue: %2u %2u", 
+    //         front_sensor_value, left_sensor_value, 
+    //         right_sensor_value, battery_adc, 
+    //         ldr_left_freq, ldr_right_freq,
+    //         ldr_left_value, ldr_right_value); // remove later
+    // serial0_print_string(serialString);
     
     // if (serial2_available)
 
-    if (XBEE_AVAILABLE()) {
-      XBEE_GET(rx_data, 4);
+    if (1) {
+      serial2_get_data(rx_data, 4); 
 
-      uint8_t auto_mode = rx_data[3]; // 0 for manual, 1 for auto
+      // uint8_t auto_mode = rx_data[3]; // 0 for manual, 1 for auto
+      uint8_t auto_mode = 1; // for testing, set to auto mode always
 
       if (auto_mode) {
-        // auto mode code here
+        // hug the right wall
+        // we are guaranteed only 90deg turns
+        // front senssor close -> turn left || right sensor gone -> turn right || go forwards
+
+        // default: 
+        uint8_t drive_x = 30;
+        uint8_t drive_y = 126;
+
+        if (front_sensor_value < 15) {
+          // turn left
+          drive_x = 126;
+          drive_y = 50;
+        }
+        else if (right_sensor_value > 25) {
+          // turn right
+          drive_x = 90;
+          drive_y = 190;
+        }
+        else if (right_sensor_value < 10) {
+          // turn left
+          drive_x = 80;
+          drive_y = 100;
+        }
+        
+        motor_magic(drive_x, drive_y);
       } else {
         motor_magic(rx_data[0], rx_data[1]); // set motor speeds and directions based on raw input
         OCR1A = rx_data[2] * 4 * 1.76 + 620; // need to make it delta
       }
 
-      sprintf(serialString, "%d %d\n", OCR3A, OCR3B); // how fast motors are rotating
+      sprintf(serialString, "%ucm %ucm\n", OCR3A, OCR3B); // how fast motors are rotating
       serial0_print_string(serialString);
     }
 
     if ( ( current_ms - last_send_ms) >= 50 ) {
-      XBEE_SEND(6, front_sensor_value, right_sensor_value, left_sensor_value, battery_adc, ldr_left_freq, ldr_right_freq);
+      serial2_write_bytes(6, front_sensor_value, left_sensor_value, right_sensor_value, battery_adc, ldr_left_freq, ldr_right_freq);  
       last_send_ms = current_ms;
     }
     //if ( serial2_available )
 
+    
   }
 
   return (1);

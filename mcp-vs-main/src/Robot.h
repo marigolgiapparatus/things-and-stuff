@@ -23,16 +23,5 @@
 #define BUILD_DATE __TIME__ " " __DATE__"\n"
 
 // Comment out this line to switch back to real XBee (serial2) operation
-#define USB_SIM
-
-#ifdef USB_SIM
-  #define XBEE_AVAILABLE()  serial0_available()
-  #define XBEE_GET(buf, n)  serial0_get_data(buf, n)
-  #define XBEE_SEND(...)    serial0_write_bytes(__VA_ARGS__)
-#else
-  #define XBEE_AVAILABLE()  serial2_available()
-  #define XBEE_GET(buf, n)  serial2_get_data(buf, n)
-  #define XBEE_SEND(...)    serial2_write_bytes(__VA_ARGS__)
-#endif
 
 #endif /* ATMEGA2560_H_ */
